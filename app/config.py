@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import EmailStr, Field
+from pydantic import EmailStr, Field, field_validator
 
 
 class Settings(BaseSettings):
@@ -14,7 +14,19 @@ class Settings(BaseSettings):
 
     api_title: str = Field(default="Mailbridge")
     api_version: str = Field(default="1.0.0")
-    cors_origins: list[str] = Field(default=["*"])
+    cors_origins: str = Field(default="*")
+
+    @field_validator('cors_origins', mode='before')
+    @classmethod
+    def parse_cors_origins(cls, v):
+        if isinstance(v, str):
+            return v
+        return v
+
+    def get_cors_origins_list(self) -> list[str]:
+        if self.cors_origins == "*":
+            return ["*"]
+        return [origin.strip() for origin in self.cors_origins.split(",")]
 
     model_config = SettingsConfigDict(
         env_file=".env",
