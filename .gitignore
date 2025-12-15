@@ -110,7 +110,6 @@ celerybeat.pid
 
 # mkdocs
 /site
-
 # Temporary files
 *.tmp
 *.temp
