@@ -1,22 +1,16 @@
-# Mailbridge
+# ContactStore
 
-A simple, clean, and production-ready email notification service built with FastAPI. Bridges contact form submissions to your email inbox.
+Contact request storage service built with FastAPI. Stores contact form submissions in PostgreSQL.
 
-- Simple REST API with single `/send-email` endpoint
-- Production-ready Docker image with multi-stage builds
+## Features
+
+- Simple REST API with `/submit-request` endpoint
+- PostgreSQL database for persistent storage
 - Input validation and sanitization (prevents injection attacks)
-- SMTP support (Gmail and other providers)
-- Responsive HTML email templates
 - Health check endpoint for monitoring
 - CORS enabled for frontend integration
-- GitHub Actions CI/CD for automatic Docker image publishing
-
-**Example Use Case**
-
-- User submit a form on a website (name, email, phone, company, message)
-- The form data is sent to this API
-- The API sends a formatted email to the business email
-- The business email receives the template email with all sender details
+- Docker-based deployment
+- GitHub Actions CI/CD for automatic image publishing
 
 ## Quick Start
 
@@ -26,39 +20,26 @@ A simple, clean, and production-ready email notification service built with Fast
 cp .env.example .env
 ```
 
-Edit `.env` with your configuration:
+Edit `.env`:
 
 ```env
-RECIPIENT_EMAIL=your-business@example.com
-RECIPIENT_NAME=Your Business Name
-
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your-gmail@gmail.com
-SMTP_PASSWORD=your-app-specific-password
-SMTP_USE_TLS=true
+POSTGRES_USER=contactstore
+POSTGRES_PASSWORD=changeme
+POSTGRES_DB=contactstore
 ```
 
-**Gmail SMTP Setup:**
-1. Enable 2-Factor Authentication on your Google account
-2. Go to [Google Account Security](https://myaccount.google.com/security)
-3. Click "App passwords" (appears only after enabling 2FA)
-4. Select "Mail" and "Other (Custom name)"
-5. Copy the generated 16-character password
-6. Use this password in `SMTP_PASSWORD` (not your regular Gmail password)
-
-### 2. Run with Docker Compose
+### 2. Run
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-Service available at `http://localhost:8000`
+The service automatically creates the `contact_requests` table on startup.
 
-### 3. Test the API
+### 3. Test
 
 ```bash
-curl -X POST http://localhost:8000/send-email \
+curl -X POST http://localhost:8000/submit-request \
   -H "Content-Type: application/json" \
   -d '{
     "fullname": "John Doe",
@@ -69,13 +50,11 @@ curl -X POST http://localhost:8000/send-email \
   }'
 ```
 
-## API Reference
+## API
 
-### POST /send-email
+### POST /submit-request
 
-Send a contact form notification.
-
-**Request Body:**
+**Request:**
 ```json
 {
   "fullname": "John Doe",
@@ -86,128 +65,71 @@ Send a contact form notification.
 }
 ```
 
-**Field Requirements:**
-- `fullname`: Required, 1-100 characters
-- `email`: Required, valid email format
-- `phone`: Required, 1-50 characters
-- `company`: Required, 1-200 characters
-- `message`: Optional, max 500 characters
-
-**Success Response (200):**
+**Response (201):**
 ```json
 {
   "success": true,
-  "message": "Email sent successfully"
+  "message": "Request submitted successfully"
 }
 ```
 
-**Error Response (400/500):**
-```json
-{
-  "success": false,
-  "message": "Error description"
-}
-```
+**Field Requirements:**
+- `fullname`: 1-100 characters (required)
+- `email`: Valid email format (required)
+- `phone`: 1-50 characters (required)
+- `company`: 1-200 characters (required)
+- `message`: Max 500 characters (optional)
 
 ### GET /health
 
-Health check endpoint.
-
-**Response:**
 ```json
 {
   "status": "healthy",
-  "smtp_configured": true,
-  "recipient_configured": true
+  "database_configured": true
 }
 ```
 
-**Interactive API Docs:** Once running, visit `http://localhost:8000/docs`
+**Docs:** `http://localhost:8000/docs`
 
-## Deployment
+## Database Access
 
-**Authentication & Security:**
-Mailbridge is designed to run behind an API gateway (Traefik) where authentication and rate limiting are handled. This follows microservices best practices and keeps Mailbridge simple and stateless.
+### View Submissions
 
-**Traefik Middleware Options:**
-- API key authentication
-- IP whitelisting
-- Rate limiting (example above)
-- OAuth/JWT if needed
+```bash
+docker compose exec contactstore_db psql -U contactstore -d contactstore
 
-**Security Features**
+SELECT id, fullname, email, company, created_at
+FROM contact_requests
+ORDER BY created_at DESC LIMIT 10;
+```
 
-- Email format validation using `email-validator`
-- String length limits on all fields
-- Newline/null byte removal (prevents header injection)
-- HTML auto-escaping in templates (prevents XSS)
-- Non-root user in Docker container
-- Input sanitization on all text fields
+### Export to CSV
 
-**Configuration**
+```bash
+docker compose exec contactstore_db psql -U contactstore -d contactstore \
+  -c "\COPY (SELECT * FROM contact_requests ORDER BY created_at DESC) TO STDOUT WITH CSV HEADER" \
+  > submissions.csv
+```
+
+
+### Configuration
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `RECIPIENT_EMAIL` | Yes | - | Email that receives notifications |
-| `RECIPIENT_NAME` | Yes | - | Recipient name |
-| `SMTP_HOST` | No | `smtp.gmail.com` | SMTP server |
-| `SMTP_PORT` | No | `587` | SMTP port |
-| `SMTP_USERNAME` | Yes | - | SMTP username |
-| `SMTP_PASSWORD` | Yes | - | SMTP password or app-specific password |
-| `SMTP_USE_TLS` | No | `true` | Use TLS |
-| `API_TITLE` | No | `Mailbridge` | API title |
+| `POSTGRES_USER` | Yes | - | Database user |
+| `POSTGRES_PASSWORD` | Yes | - | Database password |
+| `POSTGRES_DB` | Yes | - | Database name |
+| `POSTGRES_HOST` | No | `contactstore_db` | Database host |
+| `POSTGRES_PORT` | No | `5432` | Database port |
+| `API_TITLE` | No | `ContactStore` | API title |
 | `API_VERSION` | No | `1.0.0` | API version |
-| `CORS_ORIGINS` | No | `*` | Allowed CORS origins |
+| `CORS_ORIGINS` | No | `*` | Allowed origins (comma-separated or `*`) |
 
-## Troubleshooting
+### Security
 
-### Gmail Authentication Errors
-
-**Error:** "Username and Password not accepted"
-
-**Solution:**
-1. Verify 2FA is enabled on your Google account
-2. Generate a new App-Specific Password (not your regular password)
-3. Make sure you copied the full 16-character password without spaces
-4. Update `SMTP_PASSWORD` in your `.env` file
-
-### Email Not Received
-
-**Checklist:**
-- Check spam/junk folder in your recipient email
-- Verify logs: `docker-compose logs -f mailbridge`
-- Test health endpoint: `curl http://localhost:8000/health`
-- Confirm SMTP credentials are correct in `.env`
-- Ensure SMTP port 587 is not blocked by your firewall
-
-### Connection Timeout
-
-If you get SMTP connection timeouts:
-- Try port 465 with `SMTP_PORT=465`
-- Check if your network/ISP blocks outbound SMTP
-- Verify Gmail allows "Less secure app access" or use app password
-
-## Frontend Integration
-
-```javascript
-async function handleContactForm(formData) {
-  const response = await fetch('http://localhost:8000/send-email', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      fullname: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      company: formData.company,
-      message: formData.message,
-    }),
-  });
-
-  const result = await response.json();
-  if (result.success) {
-    alert('Message sent successfully!');
-  } else {
-    alert('Failed to send: ' + result.message);
-  }
-}
-```
+- Designed to run behind API gateway (Traefik) for auth/rate limiting
+- Email format validation
+- String length limits on all fields
+- Input sanitization (prevents injection attacks)
+- SQL injection protection via SQLAlchemy ORM
+- Non-root Docker user

@@ -2,7 +2,7 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
-class EmailRequest(BaseModel):
+class ContactRequestCreate(BaseModel):
     fullname: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
     phone: str = Field(..., min_length=1, max_length=50)
@@ -26,6 +26,6 @@ class EmailRequest(BaseModel):
         return v
 
 
-class EmailResponse(BaseModel):
+class ContactRequestResponse(BaseModel):
     success: bool
     message: str
