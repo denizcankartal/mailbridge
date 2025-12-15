@@ -10,6 +10,7 @@ from app.models import EmailRequest
 
 logger = logging.getLogger(__name__)
 
+# Set up Jinja2 environment for email templates
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 jinja_env = Environment(
     loader=FileSystemLoader(TEMPLATES_DIR),
@@ -18,6 +19,8 @@ jinja_env = Environment(
 
 
 class EmailService:
+    """Service for sending emails via SMTP."""
+
     def __init__(self):
         self.smtp_host = settings.smtp_host
         self.smtp_port = settings.smtp_port
@@ -28,41 +31,54 @@ class EmailService:
         self.recipient_name = settings.recipient_name
 
     async def send_notification_email(self, email_request: EmailRequest) -> None:
-        try:
-            message = MIMEMultipart('alternative')
-            message['Subject'] = f"New Contact: {email_request.fullname}"
-            message['From'] = self.smtp_username
-            message['To'] = self.recipient_email
-            message['Reply-To'] = str(email_request.email)
+        """
+        Send a notification email to the configured recipient.
 
+        Args:
+            email_request: The email request containing sender details and message
+
+        Raises:
+            aiosmtplib.SMTPException: If email sending fails
+        """
+        try:
+            # Create message
+            message = MIMEMultipart('alternative')
+            message['Subject'] = email_request.subject
+            message['From'] = f"{self.smtp_username}"
+            message['To'] = self.recipient_email
+            message['Reply-To'] = email_request.sender_email
+
+            # Render HTML template
             template = jinja_env.get_template('notification.html')
             html_content = template.render(
-                fullname=email_request.fullname,
-                email=str(email_request.email),
-                phone=email_request.phone,
-                company=email_request.company,
+                sender_name=email_request.sender_name,
+                sender_email=email_request.sender_email,
+                subject=email_request.subject,
                 message=email_request.message,
                 recipient_name=self.recipient_name
             )
 
+            # Create plain text version (fallback)
             text_content = f"""
-New Contact Form Submission
+New notification from {email_request.sender_name}
 
-Name: {email_request.fullname}
-Email: {email_request.email}
-Phone: {email_request.phone}
-Company: {email_request.company}
-Message: {email_request.message or 'N/A'}
+From: {email_request.sender_email}
+Subject: {email_request.subject}
+
+Message:
+{email_request.message}
 
 ---
-Sent via Mailbridge
+This email was sent via Granova Email Service
             """.strip()
 
+            # Attach both plain text and HTML versions
             part_text = MIMEText(text_content, 'plain')
             part_html = MIMEText(html_content, 'html')
             message.attach(part_text)
             message.attach(part_html)
 
+            # Send email
             await aiosmtplib.send(
                 message,
                 hostname=self.smtp_host,
@@ -73,14 +89,18 @@ Sent via Mailbridge
                 timeout=10,
             )
 
-            logger.info(f"Email sent to {self.recipient_email} from {email_request.email}")
+            logger.info(
+                f"Email sent successfully to {self.recipient_email} "
+                f"from {email_request.sender_email}"
+            )
 
         except aiosmtplib.SMTPException as e:
             logger.error(f"Failed to send email: {str(e)}")
             raise
         except Exception as e:
-            logger.error(f"Unexpected error: {str(e)}")
+            logger.error(f"Unexpected error sending email: {str(e)}")
             raise
 
 
+# Global email service instance
 email_service = EmailService()
