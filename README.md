@@ -91,7 +91,7 @@ Send a contact form notification.
 - `email`: Required, valid email format
 - `phone`: Required, 1-50 characters
 - `company`: Required, 1-200 characters
-- `message`: Optional, max 5000 characters
+- `message`: Optional, max 500 characters
 
 **Success Response (200):**
 ```json

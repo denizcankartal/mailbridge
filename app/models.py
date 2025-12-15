@@ -7,7 +7,7 @@ class EmailRequest(BaseModel):
     email: EmailStr
     phone: str = Field(..., min_length=1, max_length=50)
     company: str = Field(..., min_length=1, max_length=200)
-    message: Optional[str] = Field(None, max_length=5000)
+    message: Optional[str] = Field(None, max_length=500)
 
     @field_validator('fullname', 'phone', 'company', 'message')
     @classmethod
